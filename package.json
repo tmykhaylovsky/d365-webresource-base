@@ -1,0 +1,12 @@
+{
+    "name": "d365-webresource-base",
+    "version": "1.0.0",
+    "description": "D365 web resource utility layer — dev tooling only, not uploaded to D365",
+    "private": true,
+    "scripts": {
+        "setup": "npm install"
+    },
+    "devDependencies": {
+        "@types/xrm": "^9.0.92"
+    }
+}
