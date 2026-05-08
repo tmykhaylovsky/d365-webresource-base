@@ -21,5 +21,11 @@ dist/
 scripts/deploy.config.json
 .d365deploy/
 
+# Playwright — saved browser sessions, test artifacts, and local env config (never commit)
+playwright/.auth/
+playwright/test.env.json
+playwright-report/
+test-results/
+
 # Claude Code local infra
 .claude/

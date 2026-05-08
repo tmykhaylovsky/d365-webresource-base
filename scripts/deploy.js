@@ -9,7 +9,7 @@
 //
 // Setup:
 //   1. Copy scripts/deploy.config.example.json → scripts/deploy.config.json
-//   2. Set "environment" to your Dataverse URL (e.g. https://qlaprod.crm.dynamics.com)
+//   2. Set "environment" to your Dataverse URL (e.g. https://{ENVIRONMENT}.crm.dynamics.com)
 //   3. npm install
 //
 // Usage:
@@ -258,9 +258,10 @@ async function buildApiClient(config) {
 }
 
 async function findWebResource(api, name) {
-    const result = await api.retrieveMultipleRecords('webresource', {
-        filters: [{ conditions: [{ attribute: 'name', operator: 'eq', value: name }] }],
-        select:  ['webresourceid', 'name', 'displayname', 'modifiedon']
+    const result = await api.retrieveMultiple({
+        collection: 'webresourceset',
+        filter:     `name eq '${name}'`,
+        select:     ['webresourceid', 'name', 'displayname', 'modifiedon']
     });
     return result.value.length > 0 ? result.value[0] : null;
 }
@@ -276,14 +277,14 @@ async function uploadWebResource(api, filePath, config) {
 
     if (existing) {
         webResourceId = existing.webresourceid;
-        await api.updateRecord({
+        await api.update({
             collection: 'webresourceset',
             key:        webResourceId,
             data:       { content: b64 }
         });
         process.stdout.write('[deploy] updated  ' + name + '  ');
     } else {
-        webResourceId = await api.createRecord({
+        webResourceId = await api.create({
             collection: 'webresourceset',
             data: {
                 name:            name,
@@ -303,14 +304,18 @@ async function uploadWebResource(api, filePath, config) {
 
 async function _publishWebResource(api, webResourceId) {
     const xml = `<importexportxml><webresources><webresource>{${webResourceId}}</webresource></webresources></importexportxml>`;
-    await api.callAction('PublishXml', { ParameterXml: xml });
+    await api.callAction({
+        actionName: 'PublishXml',
+        action:     { ParameterXml: xml }
+    });
 }
 
 async function listWebResources(api, prefix) {
-    const result = await api.retrieveMultipleRecords('webresource', {
-        filters: [{ conditions: [{ attribute: 'name', operator: 'begins-with', value: prefix + '_' }] }],
-        select:  ['name', 'displayname', 'webresourcetype', 'modifiedon'],
-        orderBy: [{ attribute: 'name' }]
+    const result = await api.retrieveMultiple({
+        collection: 'webresourceset',
+        filter:     `startswith(name, '${prefix}_')`,
+        select:     ['name', 'displayname', 'webresourcetype', 'modifiedon'],
+        orderBy:    ['name']
     });
 
     if (result.value.length === 0) {

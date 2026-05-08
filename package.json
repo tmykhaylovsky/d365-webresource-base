@@ -4,16 +4,21 @@
     "description": "D365 web resource utility layer — dev tooling only, not uploaded to D365",
     "private": true,
     "scripts": {
-        "setup":   "npm install",
-        "deploy":  "node scripts/deploy.js",
-        "list":    "node scripts/deploy.js --list",
-        "logout":  "node scripts/deploy.js --logout"
+        "setup": "npm install",
+        "deploy":      "node scripts/deploy.js",
+        "list":        "node scripts/deploy.js --list",
+        "logout":      "node scripts/deploy.js --logout",
+        "auth":        "node playwright/setup-auth.js",
+        "test":        "npx playwright test",
+        "test:headed": "npx playwright test --headed",
+        "test:ui":     "npx playwright test --ui"
     },
     "engines": {
         "node": ">=18.0.0"
     },
     "devDependencies": {
         "@azure/msal-node": "^5.2.0",
+        "@playwright/test": "^1.59.1",
         "@types/xrm": "^9.0.92",
         "dynamics-web-api": "^2.5.0"
     }

@@ -89,12 +89,12 @@ Ops.Debug = (function () {
         s.border     = '1px solid #555';
         s.borderRadius = '3px';
         s.cursor     = 'pointer';
-        s.opacity    = '0.35';
+        s.opacity    = '0.85';
         s.transition = 'opacity 0.15s';
         s.userSelect = 'none';
 
         btn.addEventListener('mouseenter', function () { btn.style.opacity = '1'; });
-        btn.addEventListener('mouseleave', function () { btn.style.opacity = '0.35'; });
+        btn.addEventListener('mouseleave', function () { btn.style.opacity = '0.85'; });
         btn.addEventListener('click', function () {
             _copyToClipboard();
             btn.textContent = 'DBG ✓';

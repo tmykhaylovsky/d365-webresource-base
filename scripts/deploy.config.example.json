@@ -2,7 +2,7 @@
     "_comment": "Copy to deploy.config.json and fill in values. deploy.config.json is gitignored.",
 
     "_environment_comment": "Required — your Dataverse environment root URL.",
-    "environment": "https://qlaprod.crm.dynamics.com",
+    "environment": "https://{ENVIRONMENT}.crm.dynamics.com",
 
     "_auth_comment": "Optional. Defaults use the well-known 'Dynamics CRM' public client app (no app registration required). Set tenantId to your directory tenant ID for faster login (skips tenant discovery). Set clientId only if you create your own app registration.",
     "tenantId": "your-azure-ad-tenant-id",
