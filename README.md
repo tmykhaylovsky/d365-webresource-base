@@ -1,0 +1,1 @@
+# d365-webresource-base
