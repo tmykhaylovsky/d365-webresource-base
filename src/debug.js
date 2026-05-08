@@ -9,8 +9,9 @@
 //   Ops.Debug.printTable();                        // view log as a table
 //   Ops.Debug.copyToClipboard();                   // copy JSON to clipboard
 
-/* global navigator */
+/* global navigator, document */
 
+// @ts-ignore — namespace merge pattern; Ops is always loaded before this file
 var Ops = Ops || {};
 
 Ops.Debug = (function () {
@@ -19,6 +20,7 @@ Ops.Debug = (function () {
     // Mirrors PluginLogger.TraceLevel — same ordinal values, same names
     var Level = Object.freeze({ Off: 0, Critical: 1, Warning: 2, Info: 3, Verbose: 4 });
 
+    /** @type {number} */
     var _globalLevel = Level.Info;  // matches most production plugin configs
     var _prefix = '';
     var _log = [];
@@ -49,6 +51,57 @@ Ops.Debug = (function () {
             case Level.Verbose:  console.debug(line, entry.data); break;
             default:             console.log(line, entry.data);   break;
         }
+    }
+
+    function _copyToClipboard() {
+        var json = JSON.stringify(_log, null, 2);
+        if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(json).then(function () {
+                console.log('[Ops.Debug] Log copied to clipboard (' + _log.length + ' entries)');
+            });
+        } else if (typeof window !== 'undefined' && window.prompt) {
+            window.prompt('Copy log JSON:', json);
+        }
+    }
+
+    // Injects a small fixed-position button into document.body that copies the log on click.
+    // Call once from onLoad — re-entry is a no-op if the button is already in the DOM.
+    // Unsupported DOM manipulation: works in D365 UCI in practice but may break after platform updates.
+    function _injectButton() {
+        if (typeof document === 'undefined') return;
+        if (document.getElementById('ops-debug-btn')) return;
+
+        var btn = document.createElement('button');
+        btn.id = 'ops-debug-btn';
+        btn.textContent = 'DBG';
+        btn.title = 'Copy Ops.Debug log to clipboard';
+
+        var s = btn.style;
+        s.position   = 'fixed';
+        s.bottom     = '16px';
+        s.right      = '16px';
+        s.zIndex     = '2147483647';
+        s.padding    = '4px 8px';
+        s.fontSize   = '10px';
+        s.fontFamily = 'Segoe UI, sans-serif';
+        s.background = '#1e1e1e';
+        s.color      = '#d4d4d4';
+        s.border     = '1px solid #555';
+        s.borderRadius = '3px';
+        s.cursor     = 'pointer';
+        s.opacity    = '0.35';
+        s.transition = 'opacity 0.15s';
+        s.userSelect = 'none';
+
+        btn.addEventListener('mouseenter', function () { btn.style.opacity = '1'; });
+        btn.addEventListener('mouseleave', function () { btn.style.opacity = '0.35'; });
+        btn.addEventListener('click', function () {
+            _copyToClipboard();
+            btn.textContent = 'DBG ✓';
+            setTimeout(function () { btn.textContent = 'DBG'; }, 1500);
+        });
+
+        document.body.appendChild(btn);
     }
 
     return {
@@ -130,16 +183,7 @@ Ops.Debug = (function () {
          * // Click the debug panel button on the form, or call directly in DevTools:
          * Ops.Debug.copyToClipboard(); // then Ctrl+V into Notepad or a support ticket
          */
-        copyToClipboard: function () {
-            var json = JSON.stringify(_log, null, 2);
-            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(json).then(function () {
-                    console.log('[Ops.Debug] Log copied to clipboard (' + _log.length + ' entries)');
-                });
-            } else if (typeof window !== 'undefined' && window.prompt) {
-                window.prompt('Copy log JSON:', json);
-            }
-        },
+        copyToClipboard: _copyToClipboard,
 
         /**
          * Dumps the log to the DevTools console as a table — quick visual inspection.
@@ -149,6 +193,15 @@ Ops.Debug = (function () {
             if (typeof console !== 'undefined' && console.table) {
                 console.table(_log);
             }
-        }
+        },
+
+        /**
+         * Injects a small fixed-position button (bottom-right) that copies the log on click.
+         * Call once from onLoad — safe to call repeatedly, re-entry is a no-op.
+         * @example
+         * // In onLoad — no form editor setup needed:
+         * Ops.Debug.injectButton();
+         */
+        injectButton: _injectButton
     };
 }());

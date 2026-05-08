@@ -16,3 +16,10 @@ dist/
 # Temp
 *.log
 *.tmp
+
+# Deploy script — local config and cached auth tokens (never commit)
+scripts/deploy.config.json
+.d365deploy/
+
+# Claude Code local infra
+.claude/

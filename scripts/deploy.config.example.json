@@ -1,0 +1,26 @@
+{
+    "_comment": "Copy to deploy.config.json and fill in values. deploy.config.json is gitignored.",
+
+    "_environment_comment": "Required — your Dataverse environment root URL.",
+    "environment": "https://qlaprod.crm.dynamics.com",
+
+    "_auth_comment": "Optional. Defaults use the well-known 'Dynamics CRM' public client app (no app registration required). Set tenantId to your directory tenant ID for faster login (skips tenant discovery). Set clientId only if you create your own app registration.",
+    "tenantId": "your-azure-ad-tenant-id",
+
+    "_prefix_comment": "Publisher prefix — prepended to all auto-named web resources.",
+    "publisherPrefix": "ops",
+
+    "_fileMap_comment": "Maps src/-relative paths to D365 web resource names. Rule: {prefix}_{filename} regardless of subdirectory. Entries here override the default.",
+    "fileMap": {
+        "debug.js":                          "ops_debug.js",
+        "util.js":                           "ops_util.js",
+        "webapi.js":                         "ops_webapi.js",
+        "form.js":                           "ops_form.js",
+        "ui.js":                             "ops_ui.js",
+        "constants.js":                      "ops_constants.js",
+        "forms/account.form.js":             "ops_account.form.js",
+        "forms/account.webapi.form.js":      "ops_account.webapi.form.js",
+        "forms/account.uipatterns.form.js":  "ops_account.uipatterns.form.js",
+        "html/debug.panel.html":             "ops_debugpanel.html"
+    }
+}

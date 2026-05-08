@@ -30,37 +30,45 @@ A structured, opinionated base for modernizing or greenfielding D365 web resourc
 | `src/ui.js` | `Ops.UI` | — (client-only) |
 | `src/constants.js` | `Ops.Constants` | `Messages`, `Fields.*`, `EntityOptionSetEnum` |
 | `src/forms/account.form.js` | `Ops.Forms.Account` | `AccountUpdatePlugin` |
-| `src/html/ops.debug.panel.html` | — | Debug panel web resource |
+| `src/html/debug.panel.html` | — | Debug panel web resource |
 
 ---
 
 ## Quickstart
 
-### 0. Install dev tooling (optional but recommended)
+### 0. Install dev tooling
 
 ```bash
-npm install          # installs @types/xrm for Xrm.* IntelliSense in VS Code
+npm install
 ```
 
-`jsconfig.json` is already configured. Open any `src/*.js` file in VS Code and IntelliSense
-activates for `Xrm.WebApi`, `Xrm.Navigation`, `formContext`, etc.
+Installs `@types/xrm` (Xrm.* IntelliSense), `@azure/msal-node` (deploy auth), and `dynamics-web-api` (deploy client). `jsconfig.json` is pre-configured — open any `src/*.js` in VS Code and IntelliSense activates for `Xrm.WebApi`, `Xrm.Navigation`, `formContext`, etc.
 
-### 1. Copy the utility files into your solution
+### 1. Upload web resources to your environment
 
-Upload each `src/*.js` as a separate web resource with your publisher prefix:
+**Using the deploy script (recommended):**
 
+```bash
+# One-time: copy example config and fill in your Azure app registration details
+cp scripts/deploy.config.example.json scripts/deploy.config.json
+# edit deploy.config.json: tenantId, clientId, environment URL
+
+# First run — opens a browser login prompt (token cached for future runs)
+npm run deploy
+
+# Deploy a single file
+node scripts/deploy.js src/debug.js
+
+# List existing web resources with your publisher prefix
+npm run list
+
+# Clear cached token (force re-login)
+npm run logout
 ```
-ops_debug.js
-ops_util.js
-ops_webapi.js
-ops_form.js
-ops_ui.js
-ops_constants.js
-```
 
-For one-click publish from VS Code: install the
-[Web Resources Updater](https://marketplace.visualstudio.com/items?itemName=MaratVDeykun.MicrosoftDynamicsCRMWebResourcesUpdater)
-extension and connect it to your dev environment.
+See **App Registration Setup** below before first use.
+
+**Manual upload:** Upload each `src/*.js` as a separate web resource in the D365 solution editor with your publisher prefix (`ops_debug.js`, `ops_util.js`, etc.).
 
 ### 2. Populate `ops_constants.js` with your solution's tables, fields, and option sets
 
@@ -126,20 +134,52 @@ Ops.Debug.copyToClipboard();                     // auto-copy to clipboard
 
 ```
 src/
-  debug.js              Logger — load first
+  debug.js              Logger — load first; exposes Ops.Debug.injectButton()
   util.js               Pure helpers — date, GUID, string, debounce, dedupe
   webapi.js             Xrm.WebApi async wrapper + fluent query builder
   form.js               formContext attribute/control helpers
   ui.js                 Notifications, dialogs, navigation, progress
   constants.js          Tables, fields, option sets — customize per solution
   forms/
-    account.form.js     Example form event handler
+    account.form.js               Production Account form handler (field state, onChange, onSave)
+    account.webapi.form.js         Dev form — all WebApi CRUD + batch + query builder patterns
+    account.uipatterns.form.js     Dev form — confirm, progress, timed notifications, tab nav
   html/
-    ops.debug.panel.html  Debug panel web resource (dev-only)
+    debug.panel.html    Debug panel web resource (dev-only; iframe with log preview + controls)
+scripts/
+  deploy.js                       Upload web resources to Dataverse via REST API
+  deploy.config.example.json      Copy to deploy.config.json and fill in your credentials
 jsconfig.json           VS Code JS project config — enables @types/xrm IntelliSense
-package.json            Dev dependencies (npm install to activate IntelliSense)
+package.json            Dev dependencies
 BEST_PRACTICES.md       Full coding standards and anti-pattern list
 ```
+
+---
+
+## Deploy Auth
+
+The deploy script opens your browser for interactive login — no app registration or stored secrets required.
+
+It uses the well-known **Dynamics CRM** public client app (`51f81489-12ee-4a9e-aaae-a2591f45987d`), a multi-tenant Microsoft-registered app that supports delegated Dataverse access. The browser opens automatically; after login the tab shows "Signed in successfully" and the deploy resumes.
+
+Token is cached at `~/.d365deploy/token-cache.json` (mode 600, not committed). Refresh tokens persist across runs (typically 90 days). Run `npm run logout` to force re-authentication.
+
+**Optional overrides in `deploy.config.json`:**
+- `tenantId` — your Azure AD tenant ID; speeds up login by skipping tenant discovery
+- `clientId` — only needed if you create your own app registration (stricter environments that block the well-known client ID)
+
+**If browser auth is blocked by your tenant:**
+1. Go to [Azure Portal](https://portal.azure.com) > App registrations > New registration
+2. Name it (e.g., `d365-deploy`), single-tenant, add `http://localhost:3001` as a redirect URI (Web type)
+3. API permissions: **Dynamics CRM > user_impersonation** (delegated)
+4. Authentication: enable **Allow public client flows**
+5. Copy the client ID and tenant ID into `deploy.config.json`
+
+---
+
+## Dataverse MCP (future)
+
+The [Microsoft Dataverse MCP server](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-mcp) and the community [`mwhesse/dataverse-mcp`](https://github.com/mwhesse/dataverse-mcp) expose Dataverse operations as Claude tools — enabling Claude to query live records, inspect metadata, and deploy resources mid-conversation. To configure, add the MCP server to `.claude/settings.json`. Not set up yet — the deploy script covers the immediate workflow.
 
 ---
 

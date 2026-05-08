@@ -23,27 +23,35 @@
 //   - All async work in event handlers is fire-and-forget with .catch()
 //   - onSave: all validation state captured synchronously before any await
 
+// @ts-ignore — namespace merge pattern; Ops is always loaded before this file
 var Ops = Ops || {};
 Ops.Forms = Ops.Forms || {};
 
 Ops.Forms.Account = (function () {
     'use strict';
 
+    // Module aliases — reduce per-call verbosity; same pattern as the field/option aliases below
+    var Form   = Ops.Form;
+    var UI     = Ops.UI;
+    var Debug  = Ops.Debug;
+    var WebApi = Ops.WebApi;
+    var Util   = Ops.Util;
+
     // Aliases — mirror of "using AccountFields = ..." in the plugin base
     var Fields  = Ops.Constants.Fields.Account;
     var Options = Ops.Constants.OptionSets.Account;
     var Notif   = Ops.Constants.NotificationIds;
-    var Tabs    = Ops.Constants.FormControls.Account.Tabs;
 
-    Ops.Debug.setPrefix('Account.form');
+    Debug.setPrefix('Account.form');
 
     // -------------------------------------------------------------------------
     // onLoad — the only entry point registered in the form editor
     // -------------------------------------------------------------------------
 
+    /** @param {Xrm.Events.EventContext} executionContext */
     async function onLoad(executionContext) {
         var formContext = executionContext.getFormContext();
-        Ops.Debug.info('onLoad', { formType: Ops.Form.getFormType(formContext) });
+        Debug.info('onLoad', { formType: Form.getFormType(formContext) });
 
         _wireHandlers(formContext);
         await _initializeForm(formContext);
@@ -52,27 +60,27 @@ Ops.Forms.Account = (function () {
     // Wire all onChange and onSave handlers — always remove-then-add (prevents stacking on re-load).
     // onSave is registered here so the form editor only needs one entry (onLoad).
     function _wireHandlers(formContext) {
-        Ops.Form.addOnChange(formContext, Fields.StatusCode, onStatusCodeChange);
-        Ops.Form.addOnChange(formContext, Fields.IndustryCode, onIndustryCodeChange);
+        Form.addOnChange(formContext, Fields.StatusCode, onStatusCodeChange);
+        Form.addOnChange(formContext, Fields.IndustryCode, onIndustryCodeChange);
 
         formContext.data.entity.removeOnSave(onSave);
         formContext.data.entity.addOnSave(onSave);
     }
 
     async function _initializeForm(formContext) {
-        if (Ops.Form.isCreateForm(formContext)) return;
+        if (Form.isCreateForm(formContext)) return;
 
-        var entityId = Ops.Form.getEntityId(formContext);
-        Ops.Debug.verbose('_initializeForm', { id: entityId });
+        var entityId = Form.getEntityId(formContext);
+        Debug.verbose('_initializeForm', { id: entityId });
 
         try {
             await _applyStatusDrivenFieldState(formContext);
         } catch (err) {
-            Ops.Debug.critical('_initializeForm failed', err);
-            Ops.UI.setFormNotification(
+            Debug.critical('_initializeForm failed', err);
+            UI.setFormNotification(
                 formContext,
                 'An error occurred loading form state. Refresh and try again.',
-                Ops.UI.NotificationLevel.Warning,
+                UI.NotificationLevel.Warning,
                 Notif.LoadError
             );
         }
@@ -82,20 +90,22 @@ Ops.Forms.Account = (function () {
     // onChange handlers — named functions so removeOnChange works
     // -------------------------------------------------------------------------
 
+    /** @param {Xrm.Events.EventContext} executionContext */
     function onStatusCodeChange(executionContext) {
         var formContext = executionContext.getFormContext();
-        var statusCode = Ops.Form.getValue(formContext, Fields.StatusCode);
-        Ops.Debug.info('onStatusCodeChange', { statusCode: statusCode });
+        var statusCode = Form.getValue(formContext, Fields.StatusCode);
+        Debug.info('onStatusCodeChange', { statusCode: statusCode });
 
         _applyStatusDrivenFieldState(formContext).catch(function (err) {
-            Ops.Debug.critical('onStatusCodeChange async error', err);
+            Debug.critical('onStatusCodeChange async error', err);
         });
     }
 
+    /** @param {Xrm.Events.EventContext} executionContext */
     function onIndustryCodeChange(executionContext) {
         var formContext = executionContext.getFormContext();
-        var industry = Ops.Form.getValue(formContext, Fields.IndustryCode);
-        Ops.Debug.verbose('onIndustryCodeChange', { industry: industry });
+        var industry = Form.getValue(formContext, Fields.IndustryCode);
+        Debug.verbose('onIndustryCodeChange', { industry: industry });
         // Add industry-driven logic here
     }
 
@@ -104,32 +114,33 @@ Ops.Forms.Account = (function () {
     // D365 does not await onSave; preventSave() must be called synchronously.
     // -------------------------------------------------------------------------
 
+    /** @param {Xrm.Events.SaveEventContext} executionContext */
     function onSave(executionContext) {
         var formContext = executionContext.getFormContext();
-        var saveMode    = Ops.UI.getSaveMode(executionContext);
+        var saveMode    = UI.getSaveMode(executionContext);
 
-        Ops.Debug.info('onSave', { saveMode: saveMode });
+        Debug.info('onSave', { saveMode: saveMode });
 
-        if (saveMode === Ops.UI.SaveMode.AutoSave) return;
+        if (saveMode === UI.SaveMode.AutoSave) return;
 
         // Capture all validation state synchronously — formContext may be stale after any await
-        var name = Ops.Form.getValue(formContext, Fields.Name);
+        var name = Form.getValue(formContext, Fields.Name);
 
-        if (Ops.Util.isNullOrEmpty(name)) {
-            Ops.UI.preventSave(executionContext);
-            Ops.UI.setFormNotification(
+        if (Util.isNullOrEmpty(name)) {
+            UI.preventSave(executionContext);
+            UI.setFormNotification(
                 formContext,
                 'Account name is required.',
-                Ops.UI.NotificationLevel.Error,
+                UI.NotificationLevel.Error,
                 Notif.ValidationWarn
             );
             return;
         }
 
-        Ops.UI.clearFormNotification(formContext, Notif.ValidationWarn);
+        UI.clearFormNotification(formContext, Notif.ValidationWarn);
 
         // Async post-save side-effects go here — do not await, do not block the save
-        // _doPostSaveWork(formContext).catch(function(err) { Ops.Debug.critical('post-save error', err); });
+        // _doPostSaveWork(formContext).catch(function(err) { Debug.critical('post-save error', err); });
     }
 
     // -------------------------------------------------------------------------
@@ -137,45 +148,45 @@ Ops.Forms.Account = (function () {
     // -------------------------------------------------------------------------
 
     async function _applyStatusDrivenFieldState(formContext) {
-        var statusCode = Ops.Form.getValue(formContext, Fields.StatusCode);
+        var statusCode = Form.getValue(formContext, Fields.StatusCode);
         var isActive   = statusCode === Options.StatusCode.Active;
 
-        Ops.Form.applyFieldStates(formContext, [
+        Form.applyFieldStates(formContext, [
             { name: Fields.IndustryCode,  disabled: !isActive },
             { name: Fields.AccountNumber, disabled: !isActive }
         ]);
 
         if (!isActive) {
-            Ops.UI.setFormNotification(
+            UI.setFormNotification(
                 formContext,
                 'This account is inactive. Some fields are read-only.',
-                Ops.UI.NotificationLevel.Warning,
+                UI.NotificationLevel.Warning,
                 Notif.PermissionWarn
             );
         } else {
-            Ops.UI.clearFormNotification(formContext, Notif.PermissionWarn);
+            UI.clearFormNotification(formContext, Notif.PermissionWarn);
         }
 
-        if (isActive && Ops.Form.isUpdateForm(formContext)) {
+        if (isActive && Form.isUpdateForm(formContext)) {
             await _loadSupplementalData(formContext);
         }
     }
 
     async function _loadSupplementalData(formContext) {
-        var accountId = Ops.Form.getEntityId(formContext);
-        if (Ops.Util.isNullOrUndefined(accountId)) return;
+        var accountId = Form.getEntityId(formContext);
+        if (Util.isNullOrUndefined(accountId)) return;
 
         try {
-            var contacts = await Ops.WebApi.query('contact')
+            var contacts = await WebApi.query('contact')
                 .where('parentcustomerid/accountid eq ' + accountId)
                 .select('fullname', 'statuscode')
                 .orderBy('fullname')
                 .top(10)
                 .getAll();
-            Ops.Debug.verbose('_loadSupplementalData: ' + contacts.length + ' contact(s)');
+            Debug.verbose('_loadSupplementalData: ' + contacts.length + ' contact(s)');
             // Use contacts to populate a custom field or drive UI state
         } catch (err) {
-            Ops.Debug.warn('_loadSupplementalData failed — non-blocking', err);
+            Debug.warn('_loadSupplementalData failed — non-blocking', err);
         }
     }
 
