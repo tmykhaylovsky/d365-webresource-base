@@ -127,7 +127,7 @@ Ops.Forms.AccountUiPatterns = (function () {
         try {
             var result = await UI.withProgress(async function () {
                 return await WebApi.getRecord(
-                    Ops.Constants.Tables.Account,
+                    Ops.Constants.Tables.Account.logicalName,
                     accountId,
                     'name,numberofemployees,revenue'
                 );

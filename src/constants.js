@@ -30,17 +30,19 @@ Ops.Constants = (function () {
     // Add your solution-specific tables below the standard ones.
     // -------------------------------------------------------------------------
 
+    // Each entry: logicalName for Xrm.WebApi calls, entitySetName for raw OData/$batch URLs.
+    // Xrm.WebApi pluralizes internally; raw fetch does not.
     var Tables = Object.freeze({
-        Account:            'account',
-        Contact:            'contact',
-        Opportunity:        'opportunity',
-        Quote:              'quote',
-        SalesOrder:         'salesorder',
-        Invoice:            'invoice',
-        Product:            'product',
-        OpportunityProduct: 'opportunityproduct'
+        Account:            Object.freeze({ logicalName: 'account',            entitySetName: 'accounts' }),
+        Contact:            Object.freeze({ logicalName: 'contact',            entitySetName: 'contacts' }),
+        Opportunity:        Object.freeze({ logicalName: 'opportunity',        entitySetName: 'opportunities' }),
+        Quote:              Object.freeze({ logicalName: 'quote',              entitySetName: 'quotes' }),
+        SalesOrder:         Object.freeze({ logicalName: 'salesorder',         entitySetName: 'salesorders' }),
+        Invoice:            Object.freeze({ logicalName: 'invoice',            entitySetName: 'invoices' }),
+        Product:            Object.freeze({ logicalName: 'product',            entitySetName: 'products' }),
+        OpportunityProduct: Object.freeze({ logicalName: 'opportunityproduct', entitySetName: 'opportunityproducts' })
         // STEP 1: Add solution-specific tables here:
-        // MyCustomTable: 'prefix_mycustomtable'
+        // MyCustomTable: Object.freeze({ logicalName: 'prefix_mycustomtable', entitySetName: 'prefix_mycustomtables' })
     });
 
     // -------------------------------------------------------------------------

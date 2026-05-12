@@ -92,7 +92,7 @@ Ops.Forms.AccountWebApi = (function () {
 
         try {
             var account = await WebApi.getRecord(
-                Tables.Account,
+                Tables.Account.logicalName,
                 accountId,
                 'name,statecode,industrycode,numberofemployees,revenue'
             );
@@ -112,14 +112,30 @@ Ops.Forms.AccountWebApi = (function () {
 
     async function _demoFluentQuery(formContext) {
         var accountId = Form.getEntityId(formContext);
+        var seededId = null;
 
         try {
-            var contacts = await WebApi.query(Tables.Contact)
+            var contacts = await WebApi.query(Tables.Contact.logicalName)
                 .select('fullname', 'jobtitle', 'statuscode', 'emailaddress1')
                 .where('_parentcustomerid_value eq ' + accountId)
                 .orderBy('fullname')
                 .top(5)
                 .getAll();
+
+            if (contacts.length === 0) {
+                seededId = await WebApi.createRecord(Tables.Contact.logicalName, {
+                    firstname: '_QueryDemo',
+                    lastname:  'Contact',
+                    jobtitle:  'Seeded for fluent query demo',
+                    'parentcustomerid_account@odata.bind': '/accounts(' + accountId + ')'
+                });
+                contacts = await WebApi.query(Tables.Contact.logicalName)
+                    .select('fullname', 'jobtitle', 'statuscode', 'emailaddress1')
+                    .where('_parentcustomerid_value eq ' + accountId)
+                    .orderBy('fullname')
+                    .top(5)
+                    .getAll();
+            }
 
             Debug.info(_demoFluentQuery.name, {
                 count: contacts.length,
@@ -127,6 +143,10 @@ Ops.Forms.AccountWebApi = (function () {
             });
         } catch (err) {
             Debug.critical(_demoFluentQuery.name + ' failed', err);
+        } finally {
+            if (seededId) {
+                try { await WebApi.deleteRecord(Tables.Contact.logicalName, seededId); } catch (e) { /* ignore */ }
+            }
         }
     }
 
@@ -136,21 +156,41 @@ Ops.Forms.AccountWebApi = (function () {
 
     async function _demoRawOdata(formContext) {
         var accountId = Form.getEntityId(formContext);
+        var seededId = null;
 
         try {
             var result = await WebApi.getRecords(
-                Tables.Opportunity,
+                Tables.Opportunity.logicalName,
                 '?$filter=_customerid_value eq ' + accountId +
                 '&$select=name,estimatedvalue,statecode' +
                 '&$orderby=createdon desc' +
                 '&$top=3'
             );
+
+            if (result.length === 0) {
+                seededId = await WebApi.createRecord(Tables.Opportunity.logicalName, {
+                    name: '_ODataDemo Opportunity',
+                    'customerid_account@odata.bind': '/accounts(' + accountId + ')'
+                });
+                result = await WebApi.getRecords(
+                    Tables.Opportunity.logicalName,
+                    '?$filter=_customerid_value eq ' + accountId +
+                    '&$select=name,estimatedvalue,statecode' +
+                    '&$orderby=createdon desc' +
+                    '&$top=3'
+                );
+            }
+
             Debug.info(_demoRawOdata.name + ' — open opportunities', {
                 count: result.length,
                 names: result.map(function (o) { return o.name; })
             });
         } catch (err) {
             Debug.critical(_demoRawOdata.name + ' failed', err);
+        } finally {
+            if (seededId) {
+                try { await WebApi.deleteRecord(Tables.Opportunity.logicalName, seededId); } catch (e) { /* ignore */ }
+            }
         }
     }
 
@@ -164,7 +204,7 @@ Ops.Forms.AccountWebApi = (function () {
 
         // create
         try {
-            contactId = await WebApi.createRecord(Tables.Contact, {
+            contactId = await WebApi.createRecord(Tables.Contact.logicalName, {
                 firstname:            '_WebApiDemo',
                 lastname:             'Contact',
                 jobtitle:             'Initial title',
@@ -178,7 +218,7 @@ Ops.Forms.AccountWebApi = (function () {
 
         // update
         try {
-            await WebApi.updateRecord(Tables.Contact, contactId, {
+            await WebApi.updateRecord(Tables.Contact.logicalName, contactId, {
                 jobtitle: 'Updated via WebApi.updateRecord()'
             });
             Debug.info(_demoCrud.name + ' — jobtitle updated', { contactId: contactId });
@@ -188,7 +228,7 @@ Ops.Forms.AccountWebApi = (function () {
 
         // verify update with getRecord
         try {
-            var updated = await WebApi.getRecord(Tables.Contact, contactId, 'fullname,jobtitle');
+            var updated = await WebApi.getRecord(Tables.Contact.logicalName, contactId, 'fullname,jobtitle');
             Debug.info(_demoCrud.name + ' — getRecord after update', { jobtitle: updated.jobtitle });
         } catch (err) {
             Debug.warn(_demoCrud.name + ' getRecord after update failed', err);
@@ -196,7 +236,7 @@ Ops.Forms.AccountWebApi = (function () {
 
         // delete — always clean up, even if update failed
         try {
-            await WebApi.deleteRecord(Tables.Contact, contactId);
+            await WebApi.deleteRecord(Tables.Contact.logicalName, contactId);
             Debug.info(_demoCrud.name + ' — demo contact removed', { contactId: contactId });
         } catch (err) {
             Debug.critical(_demoCrud.name + ' delete failed — orphaned record: ' + contactId, err);
@@ -214,7 +254,7 @@ Ops.Forms.AccountWebApi = (function () {
             await WebApi.batch([
                 {
                     method: 'POST',
-                    url:    Tables.Contact,
+                    url:    Tables.Contact.entitySetName,
                     body:   {
                         firstname: '_BatchDemo',
                         lastname:  'Contact',

@@ -312,6 +312,8 @@ Ops.WebApi = (function () {
      * @param {Array<{method: string, url: string, body?: object}>} parts
      * @returns {Promise<Response>} raw fetch Response — inspect .ok and .status
      * @example
+     * // url must be the OData entity set name (plural), NOT the logical name.
+     * // Xrm.WebApi pluralizes internally; $batch does not.
      * await Ops.WebApi.batch([
      *     { method: 'PATCH', url: 'accounts(' + id1 + ')', body: { statuscode: 2 } },
      *     { method: 'PATCH', url: 'accounts(' + id2 + ')', body: { statuscode: 2 } }
@@ -325,10 +327,11 @@ Ops.WebApi = (function () {
 
         var body = '--' + boundary + '\r\n';
         body += 'Content-Type: multipart/mixed; boundary=' + changesetId + '\r\n\r\n';
-        parts.forEach(function (part) {
+        parts.forEach(function (part, i) {
             body += '--' + changesetId + '\r\n';
             body += 'Content-Type: application/http\r\n';
-            body += 'Content-Transfer-Encoding: binary\r\n\r\n';
+            body += 'Content-Transfer-Encoding: binary\r\n';
+            body += 'Content-ID: ' + (i + 1) + '\r\n\r\n';
             body += part.method + ' ' + clientUrl + '/api/data/v9.2/' + part.url + ' HTTP/1.1\r\n';
             body += 'Content-Type: application/json;type=entry\r\n\r\n';
             if (part.body) body += JSON.stringify(part.body) + '\r\n';
