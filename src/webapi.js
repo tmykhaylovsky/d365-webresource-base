@@ -46,6 +46,10 @@ Ops.WebApi = (function () {
         return new Promise(function (resolve) { setTimeout(resolve, ms); });
     }
 
+    function _getClientUrl() {
+        return Xrm.Utility.getGlobalContext().getClientUrl();
+    }
+
     // Core executor — runs apiCall(), retries on transient failure up to maxRetries times.
     // maxRetries defaults to 0 (no retry). Pass 3 for operations prone to 429 throttling.
     async function _execute(label, apiCall, maxRetries) {
@@ -277,8 +281,19 @@ Ops.WebApi = (function () {
             orderBy: function (field, desc){ _orderBys.push(field + (desc ? ' desc' : ' asc')); return builder; },
             /** @param {number} n */
             top:     function (n)          { _topN = n;                                          return builder; },
-            /** @param {string} field - navigation property to expand */
-            expand:  function (field)      { _expands.push(field);                               return builder; },
+            /**
+             * @param {string} navProp - navigation property name (same as field name for single-valued lookups;
+             *   use typed nav prop for polymorphic lookups, e.g. 'customerid_account' not 'customerid').
+             * @param {string[]} [selectFields] - fields to $select inside the expand
+             */
+            expand:  function (navProp, selectFields) {
+                var expr = navProp;
+                if (selectFields && selectFields.length) {
+                    expr += '($select=' + selectFields.join(',') + ')';
+                }
+                _expands.push(expr);
+                return builder;
+            },
 
             /**
              * Executes the query and returns all matching records (follows nextLink paging).
@@ -364,6 +379,238 @@ Ops.WebApi = (function () {
     }
 
     // -------------------------------------------------------------------------
+    // Associate / Disassociate — N:N relationships
+    // Xrm.WebApi has no native method; uses raw fetch against $ref endpoint.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Associates two records via an N:N relationship. Uses raw fetch — Xrm.WebApi has no native method.
+     * @param {string} fromEntitySetName - plural entity set name (e.g. 'opportunities')
+     * @param {string} fromId - GUID of the source record
+     * @param {string} navigationProperty - collection-valued nav property (e.g. 'opportunitycompetitors')
+     *   Find nav property names in Ops.Constants.Relationships, NOT the lookup field name.
+     * @param {string} toEntitySetName - plural entity set name of the target (e.g. 'competitors')
+     * @param {string} toId - GUID of the target record
+     * @returns {Promise<void>}
+     * @example
+     * await Ops.WebApi.associate(
+     *     'opportunities', opportunityId,
+     *     Ops.Constants.Relationships.Opportunity.Competitors,
+     *     'competitors', competitorId
+     * );
+     */
+    async function associate(fromEntitySetName, fromId, navigationProperty, toEntitySetName, toId) {
+        var baseUrl = _getClientUrl() + '/api/data/v9.2/';
+        var url = baseUrl + fromEntitySetName + '(' + Ops.Util.normalizeGuid(fromId) + ')/' + navigationProperty + '/$ref';
+        var body = { '@odata.id': baseUrl + toEntitySetName + '(' + Ops.Util.normalizeGuid(toId) + ')' };
+
+        Ops.Debug.verbose('associate — ' + fromEntitySetName + ' → ' + toEntitySetName + ' via ' + navigationProperty);
+
+        var response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'OData-MaxVersion': '4.0',
+                'OData-Version': '4.0',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(body)
+        });
+
+        if (!response.ok) {
+            var err = await response.text();
+            Ops.Debug.critical('associate failed: HTTP ' + response.status, err);
+            throw new Error('associate failed: HTTP ' + response.status + ' — ' + err);
+        }
+
+        Ops.Debug.verbose('associate — OK');
+    }
+
+    /**
+     * Disassociates two records via an N:N relationship. Uses raw fetch.
+     * @param {string} fromEntitySetName - plural entity set name (e.g. 'opportunities')
+     * @param {string} fromId - GUID of the source record
+     * @param {string} navigationProperty - collection-valued nav property (e.g. 'opportunitycompetitors')
+     * @param {string} toId - GUID of the target record to remove
+     * @returns {Promise<void>}
+     */
+    async function disassociate(fromEntitySetName, fromId, navigationProperty, toId) {
+        var baseUrl = _getClientUrl() + '/api/data/v9.2/';
+        var url = baseUrl + fromEntitySetName + '(' + Ops.Util.normalizeGuid(fromId) + ')/' +
+                  navigationProperty + '(' + Ops.Util.normalizeGuid(toId) + ')/$ref';
+
+        Ops.Debug.verbose('disassociate — ' + fromEntitySetName + ' (' + fromId + ') → ' + toId);
+
+        var response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+                'OData-MaxVersion': '4.0',
+                'OData-Version': '4.0',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            var errText = await response.text();
+            Ops.Debug.critical('disassociate failed: HTTP ' + response.status, errText);
+            throw new Error('disassociate failed: HTTP ' + response.status + ' — ' + errText);
+        }
+
+        Ops.Debug.verbose('disassociate — OK');
+    }
+
+    // -------------------------------------------------------------------------
+    // Action / Function execution — generic raw-fetch wrappers
+    // Prefer these over Xrm.WebApi.online.execute() for general use — that API
+    // requires per-action getMetadata() with parameterTypes that cannot be
+    // generalized in a wrapper.
+    // -------------------------------------------------------------------------
+
+    /**
+     * Executes an unbound or bound Dataverse action via raw fetch.
+     * @param {string} actionName - e.g. 'WinOpportunity'
+     * @param {object} [parameters] - action request body (JSON-serializable)
+     * @param {string} [boundEntitySetName] - plural entity set if bound, omit if unbound
+     * @param {string} [boundId] - record GUID if bound
+     * @returns {Promise<object|null>} parsed response body, or null for 204 No Content
+     * @example
+     * // Unbound:
+     * await Ops.WebApi.executeAction('WinOpportunity', { OpportunityClose: {...}, Status: 3 });
+     *
+     * // Bound:
+     * await Ops.WebApi.executeAction('Qualify', { CreateAccount: true }, 'leads', leadId);
+     */
+    async function executeAction(actionName, parameters, boundEntitySetName, boundId) {
+        var baseUrl = _getClientUrl() + '/api/data/v9.2/';
+        var url = (boundEntitySetName && boundId)
+            ? baseUrl + boundEntitySetName + '(' + Ops.Util.normalizeGuid(boundId) + ')/Microsoft.Dynamics.CRM.' + actionName
+            : baseUrl + actionName;
+
+        Ops.Debug.verbose('executeAction — ' + actionName);
+
+        var response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'OData-MaxVersion': '4.0',
+                'OData-Version': '4.0',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify(parameters || {})
+        });
+
+        if (!response.ok) {
+            var errText = await response.text();
+            Ops.Debug.critical('executeAction(' + actionName + ') failed: HTTP ' + response.status, errText);
+            throw new Error(actionName + ' failed: HTTP ' + response.status + ' — ' + errText);
+        }
+
+        Ops.Debug.verbose('executeAction — ' + actionName + ' OK (HTTP ' + response.status + ')');
+        var text = await response.text();
+        return text ? JSON.parse(text) : null;
+    }
+
+    /**
+     * Executes an unbound or bound Dataverse function (GET, read-only).
+     * @param {string} functionName - e.g. 'RetrievePrincipalAccess'
+     * @param {object} [parameters] - key-value pairs appended as inline function parameters
+     * @param {string} [boundEntitySetName]
+     * @param {string} [boundId]
+     * @returns {Promise<object|null>}
+     */
+    async function executeFunction(functionName, parameters, boundEntitySetName, boundId) {
+        var baseUrl = _getClientUrl() + '/api/data/v9.2/';
+        var paramString = '';
+        if (parameters && Object.keys(parameters).length) {
+            var pairs = Object.keys(parameters).map(function (k) {
+                return k + '=' + encodeURIComponent(JSON.stringify(parameters[k]));
+            });
+            paramString = '(' + pairs.join(',') + ')';
+        }
+
+        var url = (boundEntitySetName && boundId)
+            ? baseUrl + boundEntitySetName + '(' + Ops.Util.normalizeGuid(boundId) + ')/Microsoft.Dynamics.CRM.' + functionName + paramString
+            : baseUrl + functionName + paramString;
+
+        Ops.Debug.verbose('executeFunction — ' + functionName);
+
+        var response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'OData-MaxVersion': '4.0',
+                'OData-Version': '4.0',
+                'Accept': 'application/json'
+            }
+        });
+
+        if (!response.ok) {
+            var errText = await response.text();
+            Ops.Debug.critical('executeFunction(' + functionName + ') failed: HTTP ' + response.status, errText);
+            throw new Error(functionName + ' failed: HTTP ' + response.status + ' — ' + errText);
+        }
+
+        var text = await response.text();
+        return text ? JSON.parse(text) : null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Opportunity lifecycle convenience wrappers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Closes an Opportunity as Won. Creates an opportunityclose audit activity.
+     * Do NOT use updateRecord with statecode/statuscode — it bypasses the audit trail.
+     * @param {string} opportunityId
+     * @param {string} [subject] - subject for the OpportunityClose activity (default: 'Won')
+     * @param {string} [description]
+     * @returns {Promise<void>}
+     */
+    async function winOpportunity(opportunityId, subject, description) {
+        return executeAction('WinOpportunity', {
+            OpportunityClose: {
+                '@odata.type': 'Microsoft.Dynamics.CRM.opportunityclose',
+                'opportunityid@odata.bind': '/opportunities(' + Ops.Util.normalizeGuid(opportunityId) + ')',
+                subject: subject || 'Won',
+                description: description || ''
+            },
+            Status: 3
+        });
+    }
+
+    /**
+     * Closes an Opportunity as Lost. Creates an opportunityclose audit activity.
+     * @param {string} opportunityId
+     * @param {number} [statusCode] - 4=Canceled (default), 5=OutSold
+     * @param {string} [subject]
+     * @param {string} [description]
+     * @returns {Promise<void>}
+     */
+    async function loseOpportunity(opportunityId, statusCode, subject, description) {
+        return executeAction('LoseOpportunity', {
+            OpportunityClose: {
+                '@odata.type': 'Microsoft.Dynamics.CRM.opportunityclose',
+                'opportunityid@odata.bind': '/opportunities(' + Ops.Util.normalizeGuid(opportunityId) + ')',
+                subject: subject || 'Lost',
+                description: description || ''
+            },
+            Status: statusCode || 4
+        });
+    }
+
+    /**
+     * Reopens a Won or Lost Opportunity. Sets statecode=0 (Open), statuscode=1 (InProgress).
+     * No dedicated Dataverse action exists for reopen — direct PATCH is correct here.
+     * @param {string} opportunityId
+     * @returns {Promise<void>}
+     */
+    async function reopenOpportunity(opportunityId) {
+        return updateRecord('opportunity', opportunityId, {
+            statecode: 0,
+            statuscode: 1
+        });
+    }
+
+    // -------------------------------------------------------------------------
     // Public surface
     // -------------------------------------------------------------------------
 
@@ -377,6 +624,19 @@ Ops.WebApi = (function () {
         getFirstOrDefault:  getFirstOrDefault,
         exists:             exists,
         query:              query,
-        batch:              batch
+        batch:              batch,
+        associate:          associate,
+        disassociate:       disassociate,
+        executeAction:      executeAction,
+        executeFunction:    executeFunction,
+        winOpportunity:     winOpportunity,
+        loseOpportunity:    loseOpportunity,
+        reopenOpportunity:  reopenOpportunity,
+
+        _testing: {
+            isRetryable: _isRetryable,
+            backoffMs:   _backoffMs,
+            formatError: _formatError
+        }
     };
 }());

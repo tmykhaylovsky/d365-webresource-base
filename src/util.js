@@ -137,6 +137,23 @@ Ops.Util = (function () {
     }
 
     /**
+     * Converts a Web API datetime ISO string (e.g. "2026-04-02T00:00:00Z") to a
+     * local midnight Date, using UTC parts to avoid DST shift.
+     * Use when a date-only field is returned as a datetime string (common in Web API responses).
+     * @param {string} isoString
+     * @returns {Date|null}
+     * @example
+     * // "2026-04-02T00:00:00Z" in UTC-5 would parse as Apr 1 local without this helper.
+     * Ops.Util.toLocalMidnightDate('2026-04-02T00:00:00Z') // → Apr 2 local midnight
+     */
+    function toLocalMidnightDate(isoString) {
+        if (isNullOrUndefined(isoString) || isoString === '') return null;
+        var d = new Date(isoString);
+        if (isNaN(d.getTime())) return null;
+        return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+    }
+
+    /**
      * Formats a Date for display using the browser locale.
      * @param {Date|string} date
      * @param {Intl.DateTimeFormatOptions} [options]
@@ -307,6 +324,7 @@ Ops.Util = (function () {
         toWebApiDateOnly:      toWebApiDateOnly,
         toWebApiDateTimeUtc:   toWebApiDateTimeUtc,
         parseWebApiDate:       parseWebApiDate,
+        toLocalMidnightDate:   toLocalMidnightDate,
         formatDateDisplay:     formatDateDisplay,
 
         // Object

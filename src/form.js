@@ -109,6 +109,17 @@ Ops.Form = (function () {
         setValue(formContext, name, lookupItem ? [lookupItem] : null);
     }
 
+    // Returns the display name of the first lookup value, or null.
+    function getLookupName(formContext, name) {
+        var lv = getLookupValue(formContext, name);
+        return lv ? lv.name : null;
+    }
+
+    // Clears a lookup attribute. Equivalent to setLookupValue(formContext, name, null).
+    function clearLookup(formContext, name) {
+        setValue(formContext, name, null);
+    }
+
     // -------------------------------------------------------------------------
     // Field state — setRequired / setVisible / setDisabled
     // -------------------------------------------------------------------------
@@ -175,6 +186,17 @@ Ops.Form = (function () {
     function removeOption(formContext, name, value) {
         var ctrl = getControl(formContext, name);
         if (ctrl && ctrl.removeOption) ctrl.removeOption(value);
+    }
+
+    /**
+     * Returns the selected option label. Use when you need the display text, not the integer value.
+     * @param {object} formContext
+     * @param {string} name - option set attribute logical name
+     * @returns {string|null}
+     */
+    function getOptionSetText(formContext, name) {
+        var attr = getAttribute(formContext, name);
+        return attr ? attr.getText() : null;
     }
 
     // -------------------------------------------------------------------------
@@ -273,6 +295,24 @@ Ops.Form = (function () {
         if (tab) tab.setVisible(visible);
     }
 
+    /**
+     * Sets a section's visibility. Tab and section names are case-sensitive Name properties.
+     * @param {object} formContext
+     * @param {string} tabName - tab Name property from form editor
+     * @param {string} sectionName - section Name property from form editor
+     * @param {boolean} visible
+     */
+    function setSectionVisible(formContext, tabName, sectionName, visible) {
+        var tab = getTab(formContext, tabName);
+        if (!tab) return;
+        try {
+            var section = tab.sections.get(sectionName);
+            if (section) section.setVisible(visible);
+        } catch (e) {
+            Ops.Debug.warn('Ops.Form.setSectionVisible: failed for "' + tabName + '.' + sectionName + '"', e);
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Public surface
     // -------------------------------------------------------------------------
@@ -286,6 +326,8 @@ Ops.Form = (function () {
         getLookupValue:     getLookupValue,
         getLookupId:        getLookupId,
         getLookupEntityType: getLookupEntityType,
+        getLookupName:      getLookupName,
+        clearLookup:        clearLookup,
         setLookupValue:     setLookupValue,
 
         setRequired:        setRequired,
@@ -296,6 +338,7 @@ Ops.Form = (function () {
         getControl:         getControl,
         addOptionSetOption: addOptionSetOption,
         removeOption:       removeOption,
+        getOptionSetText:   getOptionSetText,
 
         addOnChange:        addOnChange,
         removeOnChange:     removeOnChange,
@@ -311,6 +354,7 @@ Ops.Form = (function () {
         isAttributeDirty:   isAttributeDirty,
 
         getTab:             getTab,
-        setTabVisible:      setTabVisible
+        setTabVisible:      setTabVisible,
+        setSectionVisible:  setSectionVisible
     };
 }());

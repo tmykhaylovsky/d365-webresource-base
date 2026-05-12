@@ -40,7 +40,8 @@ Ops.Constants = (function () {
         SalesOrder:         Object.freeze({ logicalName: 'salesorder',         entitySetName: 'salesorders' }),
         Invoice:            Object.freeze({ logicalName: 'invoice',            entitySetName: 'invoices' }),
         Product:            Object.freeze({ logicalName: 'product',            entitySetName: 'products' }),
-        OpportunityProduct: Object.freeze({ logicalName: 'opportunityproduct', entitySetName: 'opportunityproducts' })
+        OpportunityProduct: Object.freeze({ logicalName: 'opportunityproduct', entitySetName: 'opportunityproducts' }),
+        Competitor:         Object.freeze({ logicalName: 'competitor',         entitySetName: 'competitors' })
         // STEP 1: Add solution-specific tables here:
         // MyCustomTable: Object.freeze({ logicalName: 'prefix_mycustomtable', entitySetName: 'prefix_mycustomtables' })
     });
@@ -85,7 +86,13 @@ Ops.Constants = (function () {
             ActualClose:    'actualclosedate',
             CustomerId:     'customerid',
             OwnerId:        'ownerid',
-            PipelinePhase:  'stepname'
+            PipelinePhase:  'stepname',
+            Description:    'description'
+        }),
+
+        Competitor: Object.freeze({
+            CompetitorId: 'competitorid',
+            Name:         'name'
         })
 
         // STEP 2: Add more tables here as needed
@@ -124,9 +131,15 @@ Ops.Constants = (function () {
         Opportunity: Object.freeze({
             StatusCode: Object.freeze({
                 InProgress: 1,
+                OnHold:     2,
                 Won:        3,
                 Canceled:   4,
                 OutSold:    5
+            }),
+            StateCode: Object.freeze({
+                Open: 0,
+                Won:  1,
+                Lost: 2
             })
         })
 
@@ -179,6 +192,17 @@ Ops.Constants = (function () {
     });
 
     // -------------------------------------------------------------------------
+    // Navigation property names for N:N associate/disassociate.
+    // Use these in Ops.WebApi.associate() / disassociate() — not the field logical names.
+    // -------------------------------------------------------------------------
+
+    var Relationships = Object.freeze({
+        Opportunity: Object.freeze({
+            Competitors: 'opportunitycompetitors'   // POST/DELETE /opportunities({id})/opportunitycompetitors/$ref
+        })
+    });
+
+    // -------------------------------------------------------------------------
     // Public surface
     // -------------------------------------------------------------------------
 
@@ -187,6 +211,7 @@ Ops.Constants = (function () {
         Fields:          Fields,
         OptionSets:      OptionSets,
         NotificationIds: NotificationIds,
-        FormControls:    FormControls
+        FormControls:    FormControls,
+        Relationships:   Relationships
     };
 }());

@@ -27,5 +27,8 @@ playwright/test.env.json
 playwright-report/
 test-results/
 
+# Test coverage — generated output, never commit
+coverage/
+
 # Claude Code local infra
 .claude/
