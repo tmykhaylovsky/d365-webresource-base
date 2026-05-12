@@ -143,7 +143,8 @@ Ops.Constants = (function () {
         SaveError:      'save-error',
         PermissionWarn: 'permission-warn',
         ValidationWarn: 'validation-warn',
-        LoadError:      'load-error'
+        LoadError:      'load-error',
+        DebugHint:      'debug-hint'
         // STEP 4: Add form-specific notification IDs here
     });
 

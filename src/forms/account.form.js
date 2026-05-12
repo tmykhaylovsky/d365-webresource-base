@@ -30,19 +30,20 @@ Ops.Forms = Ops.Forms || {};
 Ops.Forms.Account = (function () {
     'use strict';
 
-    // Module aliases — reduce per-call verbosity; same pattern as the field/option aliases below
-    var Form   = Ops.Form;
-    var UI     = Ops.UI;
-    var Debug  = Ops.Debug;
-    var WebApi = Ops.WebApi;
-    var Util   = Ops.Util;
+    var Form, UI, Debug, WebApi, Util, Fields, Options, Notif;
 
-    // Aliases — mirror of "using AccountFields = ..." in the plugin base
-    var Fields  = Ops.Constants.Fields.Account;
-    var Options = Ops.Constants.OptionSets.Account;
-    var Notif   = Ops.Constants.NotificationIds;
-
-    Debug.setPrefix('Account.form');
+    // Deferred until onLoad — guarantees all Ops.* modules are loaded before capture
+    function _init() {
+        Form    = Ops.Form;
+        UI      = Ops.UI;
+        Debug   = Ops.Debug;
+        WebApi  = Ops.WebApi;
+        Util    = Ops.Util;
+        Fields  = Ops.Constants.Fields.Account;
+        Options = Ops.Constants.OptionSets.Account;
+        Notif   = Ops.Constants.NotificationIds;
+        Debug.setPrefix('Account.form');
+    }
 
     // -------------------------------------------------------------------------
     // onLoad — the only entry point registered in the form editor
@@ -50,11 +51,16 @@ Ops.Forms.Account = (function () {
 
     /** @param {Xrm.Events.EventContext} executionContext */
     async function onLoad(executionContext) {
+        _init();
         var formContext = executionContext.getFormContext();
-        Debug.info('onLoad', { formType: Form.getFormType(formContext) });
+        Debug.info(onLoad.name, { formType: Form.getFormType(formContext) });
 
-        _wireHandlers(formContext);
-        await _initializeForm(formContext);
+        try {
+            _wireHandlers(formContext);
+            await _initializeForm(formContext);
+        } catch (err) {
+            Debug.critical(onLoad.name + ' failed', err);
+        }
     }
 
     // Wire all onChange and onSave handlers — always remove-then-add (prevents stacking on re-load).
@@ -68,15 +74,16 @@ Ops.Forms.Account = (function () {
     }
 
     async function _initializeForm(formContext) {
+        Debug.injectButton();
         if (Form.isCreateForm(formContext)) return;
 
         var entityId = Form.getEntityId(formContext);
-        Debug.verbose('_initializeForm', { id: entityId });
+        Debug.verbose(_initializeForm.name, { id: entityId });
 
         try {
             await _applyStatusDrivenFieldState(formContext);
         } catch (err) {
-            Debug.critical('_initializeForm failed', err);
+            Debug.critical(_initializeForm.name + ' failed', err);
             UI.setFormNotification(
                 formContext,
                 'An error occurred loading form state. Refresh and try again.',
@@ -94,10 +101,10 @@ Ops.Forms.Account = (function () {
     function onStatusCodeChange(executionContext) {
         var formContext = executionContext.getFormContext();
         var statusCode = Form.getValue(formContext, Fields.StatusCode);
-        Debug.info('onStatusCodeChange', { statusCode: statusCode });
+        Debug.info(onStatusCodeChange.name, { statusCode: statusCode });
 
         _applyStatusDrivenFieldState(formContext).catch(function (err) {
-            Debug.critical('onStatusCodeChange async error', err);
+            Debug.critical(onStatusCodeChange.name + ' async error', err);
         });
     }
 
@@ -105,7 +112,7 @@ Ops.Forms.Account = (function () {
     function onIndustryCodeChange(executionContext) {
         var formContext = executionContext.getFormContext();
         var industry = Form.getValue(formContext, Fields.IndustryCode);
-        Debug.verbose('onIndustryCodeChange', { industry: industry });
+        Debug.verbose(onIndustryCodeChange.name, { industry: industry });
         // Add industry-driven logic here
     }
 
@@ -119,7 +126,7 @@ Ops.Forms.Account = (function () {
         var formContext = executionContext.getFormContext();
         var saveMode    = UI.getSaveMode(executionContext);
 
-        Debug.info('onSave', { saveMode: saveMode });
+        Debug.info(onSave.name, { saveMode: saveMode });
 
         if (saveMode === UI.SaveMode.AutoSave) return;
 
@@ -140,7 +147,7 @@ Ops.Forms.Account = (function () {
         UI.clearFormNotification(formContext, Notif.ValidationWarn);
 
         // Async post-save side-effects go here — do not await, do not block the save
-        // _doPostSaveWork(formContext).catch(function(err) { Debug.critical('post-save error', err); });
+        // _doPostSaveWork(formContext).catch(function(err) { Debug.critical(onSave.name + ' post-save error', err); });
     }
 
     // -------------------------------------------------------------------------
@@ -178,15 +185,15 @@ Ops.Forms.Account = (function () {
 
         try {
             var contacts = await WebApi.query('contact')
-                .where('parentcustomerid/accountid eq ' + accountId)
+                .where('_parentcustomerid_value eq ' + accountId)
                 .select('fullname', 'statuscode')
                 .orderBy('fullname')
                 .top(10)
                 .getAll();
-            Debug.verbose('_loadSupplementalData: ' + contacts.length + ' contact(s)');
+            Debug.verbose(_loadSupplementalData.name + ': ' + contacts.length + ' contact(s)');
             // Use contacts to populate a custom field or drive UI state
         } catch (err) {
-            Debug.warn('_loadSupplementalData failed — non-blocking', err);
+            Debug.warn(_loadSupplementalData.name + ' failed — non-blocking', err);
         }
     }
 

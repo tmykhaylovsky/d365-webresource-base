@@ -34,17 +34,18 @@ Ops.Forms = Ops.Forms || {};
 Ops.Forms.AccountWebApi = (function () {
     'use strict';
 
-    var Form   = Ops.Form;
-    var UI     = Ops.UI;
-    var Debug  = Ops.Debug;
-    var WebApi = Ops.WebApi;
-    var Util   = Ops.Util;
+    var Form, UI, Debug, WebApi, Tables, Notif;
 
-    var Tables = Ops.Constants.Tables;
-    var Fields = Ops.Constants.Fields;
-    var Notif  = Ops.Constants.NotificationIds;
-
-    Debug.setPrefix('Account.WebApi');
+    // Deferred until onLoad — guarantees all Ops.* modules are loaded before capture
+    function _init() {
+        Form   = Ops.Form;
+        UI     = Ops.UI;
+        Debug  = Ops.Debug;
+        WebApi = Ops.WebApi;
+        Tables = Ops.Constants.Tables;
+        Notif  = Ops.Constants.NotificationIds;
+        Debug.setPrefix('Account.WebApi');
+    }
 
     // -------------------------------------------------------------------------
     // onLoad
@@ -52,6 +53,7 @@ Ops.Forms.AccountWebApi = (function () {
 
     /** @param {Xrm.Events.EventContext} executionContext */
     async function onLoad(executionContext) {
+        _init();
         var formContext = executionContext.getFormContext();
 
         if (Form.isCreateForm(formContext)) {
@@ -62,19 +64,23 @@ Ops.Forms.AccountWebApi = (function () {
         }
 
         Debug.injectButton();
-        Debug.info('onLoad — starting WebApi pattern demos');
+        Debug.info(onLoad.name + ' — starting WebApi pattern demos');
 
-        await UI.withProgress(async function () {
-            await _demoGetRecord(formContext);
-            await _demoFluentQuery(formContext);
-            await _demoRawOdata(formContext);
-            await _demoCrud(formContext);
-            await _demoBatch(formContext);
-        }, 'Running WebApi demos...');
+        try {
+            await UI.withProgress(async function () {
+                await _demoGetRecord(formContext);
+                await _demoFluentQuery(formContext);
+                await _demoRawOdata(formContext);
+                await _demoCrud(formContext);
+                await _demoBatch(formContext);
+            }, 'Running WebApi demos...');
 
-        UI.setFormNotification(formContext,
-            'WebApi demos complete. Open DevTools (F12) and run Ops.Debug.printTable() to inspect results.',
-            UI.NotificationLevel.Info, Notif.NavStatus);
+            UI.setFormNotification(formContext,
+                'WebApi demos complete. In DevTools (F12): Ops.Debug.printTable() to view, Ops.Debug.copyToClipboard() to copy.',
+                UI.NotificationLevel.Info, Notif.NavStatus);
+        } catch (err) {
+            Debug.critical(onLoad.name + ' failed', err);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -88,15 +94,15 @@ Ops.Forms.AccountWebApi = (function () {
             var account = await WebApi.getRecord(
                 Tables.Account,
                 accountId,
-                ['name', 'statecode', 'industrycode', 'numberofemployees', 'revenue']
+                'name,statecode,industrycode,numberofemployees,revenue'
             );
-            Debug.info('getRecord', {
+            Debug.info(_demoGetRecord.name, {
                 name:      account.name,
                 statecode: account.statecode,
                 revenue:   account['revenue']
             });
         } catch (err) {
-            Debug.critical('_demoGetRecord failed', err);
+            Debug.critical(_demoGetRecord.name + ' failed', err);
         }
     }
 
@@ -110,17 +116,17 @@ Ops.Forms.AccountWebApi = (function () {
         try {
             var contacts = await WebApi.query(Tables.Contact)
                 .select('fullname', 'jobtitle', 'statuscode', 'emailaddress1')
-                .where('parentcustomerid/accountid eq ' + accountId)
+                .where('_parentcustomerid_value eq ' + accountId)
                 .orderBy('fullname')
                 .top(5)
                 .getAll();
 
-            Debug.info('query() — contacts for account', {
+            Debug.info(_demoFluentQuery.name, {
                 count: contacts.length,
                 names: contacts.map(function (c) { return c.fullname; })
             });
         } catch (err) {
-            Debug.critical('_demoFluentQuery failed', err);
+            Debug.critical(_demoFluentQuery.name + ' failed', err);
         }
     }
 
@@ -139,12 +145,12 @@ Ops.Forms.AccountWebApi = (function () {
                 '&$orderby=createdon desc' +
                 '&$top=3'
             );
-            Debug.info('getRecords (raw OData) — open opportunities', {
+            Debug.info(_demoRawOdata.name + ' — open opportunities', {
                 count: result.length,
                 names: result.map(function (o) { return o.name; })
             });
         } catch (err) {
-            Debug.critical('_demoRawOdata failed', err);
+            Debug.critical(_demoRawOdata.name + ' failed', err);
         }
     }
 
@@ -158,42 +164,42 @@ Ops.Forms.AccountWebApi = (function () {
 
         // create
         try {
-            contactId = await WebApi.create(Tables.Contact, {
+            contactId = await WebApi.createRecord(Tables.Contact, {
                 firstname:            '_WebApiDemo',
                 lastname:             'Contact',
                 jobtitle:             'Initial title',
                 'parentcustomerid_account@odata.bind': '/accounts(' + accountId + ')'
             });
-            Debug.info('create — contact created', { contactId: contactId });
+            Debug.info(_demoCrud.name + ' — contact created', { contactId: contactId });
         } catch (err) {
-            Debug.critical('_demoCrud create failed', err);
+            Debug.critical(_demoCrud.name + ' create failed', err);
             return;
         }
 
         // update
         try {
-            await WebApi.update(Tables.Contact, contactId, {
-                jobtitle: 'Updated via WebApi.update()'
+            await WebApi.updateRecord(Tables.Contact, contactId, {
+                jobtitle: 'Updated via WebApi.updateRecord()'
             });
-            Debug.info('update — jobtitle updated', { contactId: contactId });
+            Debug.info(_demoCrud.name + ' — jobtitle updated', { contactId: contactId });
         } catch (err) {
-            Debug.critical('_demoCrud update failed', err);
+            Debug.critical(_demoCrud.name + ' update failed', err);
         }
 
         // verify update with getRecord
         try {
-            var updated = await WebApi.getRecord(Tables.Contact, contactId, ['fullname', 'jobtitle']);
-            Debug.info('getRecord after update', { jobtitle: updated.jobtitle });
+            var updated = await WebApi.getRecord(Tables.Contact, contactId, 'fullname,jobtitle');
+            Debug.info(_demoCrud.name + ' — getRecord after update', { jobtitle: updated.jobtitle });
         } catch (err) {
-            Debug.warn('_demoCrud getRecord after update failed', err);
+            Debug.warn(_demoCrud.name + ' getRecord after update failed', err);
         }
 
         // delete — always clean up, even if update failed
         try {
-            await WebApi.delete(Tables.Contact, contactId);
-            Debug.info('delete — demo contact removed', { contactId: contactId });
+            await WebApi.deleteRecord(Tables.Contact, contactId);
+            Debug.info(_demoCrud.name + ' — demo contact removed', { contactId: contactId });
         } catch (err) {
-            Debug.critical('_demoCrud delete failed — orphaned record: ' + contactId, err);
+            Debug.critical(_demoCrud.name + ' delete failed — orphaned record: ' + contactId, err);
         }
     }
 
@@ -203,35 +209,26 @@ Ops.Forms.AccountWebApi = (function () {
 
     async function _demoBatch(formContext) {
         var accountId = Form.getEntityId(formContext);
-        var batchContactId = null;
 
         try {
-            // Batch: two operations in one round-trip
-            var batchResults = await WebApi.batch(function (requests) {
-                requests.create(Tables.Contact, {
-                    firstname: '_BatchDemo',
-                    lastname:  'Contact',
-                    jobtitle:  'Created in batch',
-                    'parentcustomerid_account@odata.bind': '/accounts(' + accountId + ')'
-                });
-            });
+            await WebApi.batch([
+                {
+                    method: 'POST',
+                    url:    Tables.Contact,
+                    body:   {
+                        firstname: '_BatchDemo',
+                        lastname:  'Contact',
+                        jobtitle:  'Created in batch',
+                        'parentcustomerid_account@odata.bind': '/accounts(' + accountId + ')'
+                    }
+                }
+            ]);
 
-            // batch() returns array of results for each operation
-            batchContactId = batchResults[0];
-            Debug.info('batch — contact created', { batchContactId: batchContactId });
+            // batch() returns raw fetch Response — contact ID not extractable without parsing multipart body.
+            // Use createRecord() if you need the returned ID.
+            Debug.info(_demoBatch.name + ' — request sent (HTTP 200 = changeset committed)');
         } catch (err) {
-            Debug.critical('_demoBatch failed', err);
-            return;
-        }
-
-        // Clean up the batch-created contact
-        if (batchContactId && !Util.isNullOrUndefined(batchContactId)) {
-            try {
-                await WebApi.delete(Tables.Contact, batchContactId);
-                Debug.info('batch cleanup — contact removed', { batchContactId: batchContactId });
-            } catch (err) {
-                Debug.warn('_demoBatch cleanup failed — orphaned: ' + batchContactId, err);
-            }
+            Debug.critical(_demoBatch.name + ' failed', err);
         }
     }
 

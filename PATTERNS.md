@@ -14,8 +14,14 @@ async function onLoad(executionContext) {
     var formContext = executionContext.getFormContext();
     Ops.Debug.info('onLoad', { formType: Ops.Form.getFormType(formContext) });
 
-    _wireHandlers(formContext);         // wire all onChange + onSave before any await
-    await _initializeForm(formContext);
+    // Top-level catch: any uncaught throw (sync or async) lands in the Debug log.
+    // Non-blocking sub-operations keep their own catches so one failure doesn't abort the rest.
+    try {
+        _wireHandlers(formContext);     // wire all onChange + onSave before any await
+        await _initializeForm(formContext);
+    } catch (err) {
+        Ops.Debug.critical('onLoad failed', err);
+    }
 }
 
 function _wireHandlers(formContext) {
@@ -123,7 +129,7 @@ Use fluent for readability, raw string for complex OData the builder doesn't cov
 // Fluent — readable, maintainable
 var contacts = await Ops.WebApi.query('contact')
     .select('fullname', 'statuscode', 'emailaddress1')
-    .where('parentcustomerid/accountid eq ' + accountId)
+    .where('_parentcustomerid_value eq ' + accountId)
     .where('statecode eq 0')        // multiple .where() calls join with 'and'
     .orderBy('fullname')
     .top(25)
@@ -298,6 +304,40 @@ From the panel, developers can:
 - Copy the full log to clipboard (bypasses the need to know the DevTools console path)
 - Toggle between Info and Verbose level
 - See the last 20 log lines live in the panel preview
+
+---
+
+## Pattern 11 — Function.name for refactor-safe log labels
+
+JavaScript named function declarations expose their name via `Function.name`. Use it instead
+of hardcoded strings in `Debug.*` calls so log labels stay accurate through renames.
+
+```javascript
+async function _loadSupplementalData(formContext) {
+    try {
+        // ...
+        Debug.verbose(_loadSupplementalData.name + ': ' + contacts.length + ' contact(s)');
+    } catch (err) {
+        Debug.warn(_loadSupplementalData.name + ' failed — non-blocking', err);
+    }
+}
+
+function onStatusCodeChange(executionContext) {
+    Debug.info(onStatusCodeChange.name, { statusCode: statusCode });
+    _applyState(formContext).catch(function (err) {
+        Debug.critical(onStatusCodeChange.name + ' async error', err);
+    });
+}
+```
+
+**Applies to:** any named function declaration. Does NOT work on anonymous functions or arrow
+functions assigned to variables — those yield `''` or the variable name depending on the engine.
+All form event handlers and `_privateHelpers` in this repo are named declarations, so the
+pattern applies everywhere.
+
+---
+
+## Pattern 10 — Debug panel usage
 
 From the DevTools console directly:
 ```javascript

@@ -55,12 +55,17 @@ Ops.Debug = (function () {
 
     function _copyToClipboard() {
         var json = JSON.stringify(_log, null, 2);
+        function _fallback() {
+            if (typeof window !== 'undefined' && window.prompt) {
+                window.prompt('Copy log JSON (select all, Ctrl/Cmd+C):', json);
+            }
+        }
         if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(json).then(function () {
                 console.log('[Ops.Debug] Log copied to clipboard (' + _log.length + ' entries)');
-            });
-        } else if (typeof window !== 'undefined' && window.prompt) {
-            window.prompt('Copy log JSON:', json);
+            }).catch(_fallback);
+        } else {
+            _fallback();
         }
     }
 

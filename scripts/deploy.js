@@ -15,6 +15,7 @@
 // Usage:
 //   node scripts/deploy.js                  # deploy all web resources
 //   node scripts/deploy.js src/debug.js     # deploy one file
+//   node scripts/deploy.js --git            # deploy only files changed since HEAD
 //   node scripts/deploy.js --list           # list web resources matching publisherPrefix
 //   node scripts/deploy.js --logout         # clear cached token (force re-login next run)
 
@@ -24,7 +25,7 @@ const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
 const http = require('http');
-const { exec }            = require('child_process');
+const { exec, execSync } = require('child_process');
 const { PublicClientApplication, CryptoProvider } = require('@azure/msal-node');
 const { DynamicsWebApi } = require('dynamics-web-api');
 
@@ -355,6 +356,28 @@ async function main() {
 
     if (args.includes('--list')) {
         await listWebResources(api, config.publisherPrefix || 'ops');
+        return;
+    }
+
+    if (args.includes('--git')) {
+        const changed = execSync('git diff --name-only HEAD', { cwd: path.join(__dirname, '..') })
+            .toString().trim().split('\n')
+            .filter(f => f.startsWith('src/'))
+            .map(f => path.resolve(__dirname, '..', f))
+            .filter(f => fs.existsSync(f));
+
+        if (changed.length === 0) {
+            console.log('[deploy] No changed src/ files found in git diff.');
+            return;
+        }
+
+        console.log('[deploy] Deploying ' + changed.length + ' git-changed file(s) to ' + config.environment + '\n');
+        let ok = 0, failed = 0;
+        for (const filePath of changed) {
+            try { await uploadWebResource(api, filePath, config); ok++; }
+            catch (err) { console.error('[deploy] FAILED  ' + getWebResourceName(filePath, config) + ': ' + (err.message || err)); failed++; }
+        }
+        console.log('\n[deploy] Done — ' + ok + ' succeeded, ' + failed + ' failed.');
         return;
     }
 

@@ -35,17 +35,20 @@ Ops.Forms = Ops.Forms || {};
 Ops.Forms.AccountUiPatterns = (function () {
     'use strict';
 
-    var Form   = Ops.Form;
-    var UI     = Ops.UI;
-    var Debug  = Ops.Debug;
-    var WebApi = Ops.WebApi;
-    var Util   = Ops.Util;
+    var Form, UI, Debug, WebApi, Util, Fields, Notif, Tabs;
 
-    var Fields  = Ops.Constants.Fields.Account;
-    var Notif   = Ops.Constants.NotificationIds;
-    var Tabs    = Ops.Constants.FormControls.Account.Tabs;
-
-    Debug.setPrefix('Account.UiPatterns');
+    // Deferred until onLoad — guarantees all Ops.* modules are loaded before capture
+    function _init() {
+        Form   = Ops.Form;
+        UI     = Ops.UI;
+        Debug  = Ops.Debug;
+        WebApi = Ops.WebApi;
+        Util   = Ops.Util;
+        Fields = Ops.Constants.Fields.Account;
+        Notif  = Ops.Constants.NotificationIds;
+        Tabs   = Ops.Constants.FormControls.Account.Tabs;
+        Debug.setPrefix('Account.UiPatterns');
+    }
 
     // -------------------------------------------------------------------------
     // onLoad
@@ -53,20 +56,31 @@ Ops.Forms.AccountUiPatterns = (function () {
 
     /** @param {Xrm.Events.EventContext} executionContext */
     async function onLoad(executionContext) {
+        _init();
         var formContext = executionContext.getFormContext();
-        Debug.info('onLoad', { formType: Form.getFormType(formContext) });
+        Debug.info(onLoad.name, { formType: Form.getFormType(formContext) });
 
         Debug.injectButton();
+        UI.setFormNotification(
+            formContext,
+            'Debug log: Ops.Debug.printTable() to view, Ops.Debug.copyToClipboard() to copy.',
+            UI.NotificationLevel.Info,
+            Notif.DebugHint
+        );
         _wireHandlers(formContext);
 
-        if (Form.isCreateForm(formContext)) {
-            _demoNotifications(formContext);
-            return;
-        }
+        try {
+            if (Form.isCreateForm(formContext)) {
+                _demoNotifications(formContext);
+                return;
+            }
 
-        await _demoWithProgress(formContext);
-        _demoFieldStates(formContext);
-        _demoNotifications(formContext);
+            await _demoWithProgress(formContext);
+            _demoFieldStates(formContext);
+            _demoNotifications(formContext);
+        } catch (err) {
+            Debug.critical(onLoad.name + ' failed', err);
+        }
     }
 
     function _wireHandlers(formContext) {
@@ -115,16 +129,16 @@ Ops.Forms.AccountUiPatterns = (function () {
                 return await WebApi.getRecord(
                     Ops.Constants.Tables.Account,
                     accountId,
-                    ['name', 'numberofemployees', 'revenue']
+                    'name,numberofemployees,revenue'
                 );
             }, 'Loading account data...');
 
-            Debug.info('withProgress result', {
+            Debug.info(_demoWithProgress.name + ' result', {
                 name:      result.name,
                 employees: result.numberofemployees
             });
         } catch (err) {
-            Debug.warn('_demoWithProgress failed — non-blocking', err);
+            Debug.warn(_demoWithProgress.name + ' failed — non-blocking', err);
         }
     }
 
@@ -142,7 +156,7 @@ Ops.Forms.AccountUiPatterns = (function () {
             { name: Fields.AccountNumber, disabled: !isActive }
         ]);
 
-        Debug.info('_demoFieldStates applied', { isActive: isActive });
+        Debug.info(_demoFieldStates.name + ' applied', { isActive: isActive });
     }
 
     // -------------------------------------------------------------------------
@@ -153,7 +167,7 @@ Ops.Forms.AccountUiPatterns = (function () {
     function onNameChange(executionContext) {
         var formContext = executionContext.getFormContext();
         var name        = Form.getValue(formContext, Fields.Name);
-        Debug.info('onNameChange', { name: name });
+        Debug.info(onNameChange.name, { name: name });
 
         if (Util.isNullOrEmpty(name)) {
             UI.setFormNotification(
@@ -171,7 +185,7 @@ Ops.Forms.AccountUiPatterns = (function () {
     function onIndustryCodeChange(executionContext) {
         var formContext  = executionContext.getFormContext();
         var industryCode = Form.getValue(formContext, Fields.IndustryCode);
-        Debug.verbose('onIndustryCodeChange', { industryCode: industryCode });
+        Debug.verbose(onIndustryCodeChange.name, { industryCode: industryCode });
 
         // Demo: navigate to Summary tab whenever industry changes
         if (Tabs && Tabs.Summary) {
@@ -188,7 +202,7 @@ Ops.Forms.AccountUiPatterns = (function () {
         var formContext = executionContext.getFormContext();
         var saveMode    = UI.getSaveMode(executionContext);
 
-        Debug.info('onSave', { saveMode: saveMode });
+        Debug.info(onSave.name, { saveMode: saveMode });
 
         if (saveMode === UI.SaveMode.AutoSave) return;
 
@@ -197,7 +211,7 @@ Ops.Forms.AccountUiPatterns = (function () {
         var isDirty     = Form.isDirty(formContext);
         var nameDirty   = Form.isAttributeDirty(formContext, Fields.Name);
 
-        Debug.verbose('onSave state', { name: name, isDirty: isDirty, nameDirty: nameDirty });
+        Debug.verbose(onSave.name + ' state', { name: name, isDirty: isDirty, nameDirty: nameDirty });
 
         // Validation: block save if name is empty
         if (Util.isNullOrEmpty(name)) {
@@ -219,7 +233,7 @@ Ops.Forms.AccountUiPatterns = (function () {
         // In production this pattern is used for post-save side-effect prompts
         if (nameDirty) {
             _promptPostSaveAction(formContext, name).catch(function (err) {
-                Debug.warn('_promptPostSaveAction failed', err);
+                Debug.warn(_promptPostSaveAction.name + ' failed', err);
             });
         }
     }
@@ -241,7 +255,7 @@ Ops.Forms.AccountUiPatterns = (function () {
             if (Tabs && Tabs.Details) {
                 UI.navigateToTab(formContext, Tabs.Details);
             }
-            Debug.info('_promptPostSaveAction — user chose to view contacts');
+            Debug.info(_promptPostSaveAction.name + ' — user chose to view contacts');
         }
     }
 
